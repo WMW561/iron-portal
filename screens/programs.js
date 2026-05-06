@@ -853,6 +853,11 @@ function removeDayConfirm(dayId) {
 
 async function openExercisePickerPanel(dayId) {
   window.iron.openPanel('Add Exercise', `
+    <div style="margin-bottom:10px;">
+      <button class="btn btn-secondary btn-sm" id="ex-create-btn" style="width:100%;justify-content:center;">
+        + Create new exercise
+      </button>
+    </div>
     <div class="search-wrap" style="margin-bottom:12px;">
       <span class="search-icon" aria-hidden="true">🔍</span>
       <input type="search" id="ex-search" class="search-input" placeholder="Search exercises…" autocomplete="off">
@@ -898,38 +903,66 @@ async function openExercisePickerPanel(dayId) {
       renderExercisePicker(filtered, dayId);
     }, 150);
   });
+
+  // "+ Create new exercise" button — swap picker to creation form
+  document.getElementById('ex-create-btn').addEventListener('click', () => {
+    renderCustomExerciseForm(dayId, trainerId, allExercises);
+  });
 }
 
-function renderExercisePicker(exercises, dayId) {
+function renderExercisePicker(exercises, dayId, pinnedId = null) {
   const list = document.getElementById('ex-picker-list');
+
+  // If a newly-created exercise should appear at top, pull it out first
+  let pinned = null;
+  let rest = exercises;
+  if (pinnedId) {
+    pinned = exercises.find(ex => ex.id === pinnedId) ?? null;
+    rest   = exercises.filter(ex => ex.id !== pinnedId);
+  }
+
   if (!exercises.length) {
     list.innerHTML = `<p style="color:var(--text-muted);padding:8px 0;">No exercises found.</p>`;
     return;
   }
 
-  // Group by category
+  const rowHtml = (ex) => `
+    <div class="table-row" style="cursor:pointer;padding:8px 10px;"
+         tabindex="0" role="button"
+         aria-label="Select ${escHtml(ex.name)}"
+         data-ex-id="${ex.id}"
+         data-ex-name="${escHtml(ex.name)}"
+         onclick="window._ironPickExercise('${ex.id}','${dayId}')"
+         onkeydown="if(event.key==='Enter')window._ironPickExercise('${ex.id}','${dayId}')">
+      <span style="font-size:0.9rem;">${escHtml(ex.name)}</span>
+      ${ex.trainer_id ? `<span style="font-size:0.75rem;color:var(--teal);margin-left:6px;">Custom</span>` : ''}
+    </div>
+  `;
+
+  let html = '';
+
+  // Pinned newly-created exercise at top with a highlight band
+  if (pinned) {
+    html += `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:0.75rem;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">New — ready to add</div>
+        ${rowHtml(pinned)}
+      </div>
+    `;
+  }
+
+  // Group remaining exercises by category
   const byCategory = {};
-  exercises.forEach(ex => {
+  rest.forEach(ex => {
     const cat = ex.category ?? 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(ex);
   });
 
-  const html = Object.entries(byCategory).map(([cat, exes]) => `
+  html += Object.entries(byCategory).map(([cat, exes]) => `
     <div style="margin-bottom:12px;">
       <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${escHtml(cat)}</div>
-      ${exes.map(ex => `
-        <div class="table-row" style="cursor:pointer;padding:8px 10px;"
-             tabindex="0" role="button"
-             aria-label="Select ${escHtml(ex.name)}"
-             data-ex-id="${ex.id}"
-             data-ex-name="${escHtml(ex.name)}"
-             onclick="window._ironPickExercise('${ex.id}','${dayId}')"
-             onkeydown="if(event.key==='Enter')window._ironPickExercise('${ex.id}','${dayId}')">
-          <span style="font-size:0.9rem;">${escHtml(ex.name)}</span>
-          ${ex.trainer_id ? `<span style="font-size:0.75rem;color:var(--teal);margin-left:6px;">Custom</span>` : ''}
-        </div>
-      `).join('')}
+      ${exes.map(rowHtml).join('')}
     </div>
   `).join('');
 
@@ -939,6 +972,192 @@ function renderExercisePicker(exercises, dayId) {
   window._ironPickExercise = (exerciseId, dId) => {
     openPrescriptionPanel(exerciseId, dId);
   };
+}
+
+// ── Custom Exercise Creation Form ──────────────────────
+
+function renderCustomExerciseForm(dayId, trainerId, allExercises) {
+  const CATEGORIES  = ['Chest','Back','Legs','Shoulders','Arms','Core','Olympic','Cardio','Other'];
+  const EQUIPMENT   = ['Barbell','Dumbbell','Machine','Cable','Smith','Kettlebell','Bodyweight','Band','EZ Bar','Trap Bar','Other'];
+  const MOVEMENTS   = ['Push','Pull','Squat','Hinge','Lunge','Carry','Rotate','Anti-Rotate','Iso'];
+
+  const catOptions  = CATEGORIES.map(c  => `<option value="${c}">${c}</option>`).join('');
+  const eqOptions   = EQUIPMENT.map(e   => `<option value="${e}">${e}</option>`).join('');
+  const mvOptions   = `<option value="">— optional —</option>` +
+                      MOVEMENTS.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  // Hide search + create button; swap list area to form
+  const searchWrap = document.querySelector('#ex-search')?.closest('.search-wrap');
+  const createBtn  = document.getElementById('ex-create-btn');
+  if (searchWrap) searchWrap.style.display = 'none';
+  if (createBtn)  createBtn.style.display  = 'none';
+
+  document.getElementById('ex-picker-list').innerHTML = `
+    <form id="cef-form" novalidate>
+      <div class="form-group">
+        <label for="cef-name">Exercise Name <span class="req">*</span></label>
+        <input type="text" id="cef-name" placeholder="e.g. Incline DB Fly" required autocomplete="off">
+        <span class="field-error" id="err-cef-name" style="display:none;" role="alert"></span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <div class="form-group" style="margin:0;">
+          <label for="cef-category">Category <span class="req">*</span></label>
+          <select id="cef-category" required>
+            <option value="">— select —</option>
+            ${catOptions}
+          </select>
+          <span class="field-error" id="err-cef-category" style="display:none;" role="alert"></span>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label for="cef-equipment">Equipment <span class="req">*</span></label>
+          <select id="cef-equipment" required>
+            <option value="">— select —</option>
+            ${eqOptions}
+          </select>
+          <span class="field-error" id="err-cef-equipment" style="display:none;" role="alert"></span>
+        </div>
+      </div>
+
+      <details id="cef-advanced" style="margin-bottom:18px;">
+        <summary style="font-size:13px;font-weight:600;color:var(--text-secondary);cursor:pointer;user-select:none;margin-bottom:12px;">
+          Show advanced options
+        </summary>
+
+        <div class="form-group">
+          <label for="cef-muscle">Muscle Group</label>
+          <input type="text" id="cef-muscle" placeholder="e.g. Upper Chest" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label for="cef-movement">Movement Pattern</label>
+          <select id="cef-movement">${mvOptions}</select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+          <div class="form-group" style="margin:0;">
+            <label for="cef-sets">Default Sets</label>
+            <input type="number" id="cef-sets" min="1" max="20" placeholder="4">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label for="cef-reps">Default Reps</label>
+            <input type="text" id="cef-reps" placeholder="8-10">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label for="cef-tempo">Default Tempo</label>
+            <input type="text" id="cef-tempo" placeholder="3-1-1">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label for="cef-rest">Default Rest (sec)</label>
+            <input type="number" id="cef-rest" min="0" max="600" placeholder="90">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="cef-cue">Coaching Cue</label>
+          <textarea id="cef-cue" rows="2"
+                    placeholder="e.g. Keep elbows soft; drive the weight up from the chest, not the delts."></textarea>
+        </div>
+      </details>
+
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button type="button" class="btn btn-primary" id="cef-save-btn" style="flex:1;">Save &amp; Add to Day</button>
+        <button type="button" class="btn btn-secondary" id="cef-cancel-btn">Cancel</button>
+      </div>
+    </form>
+  `;
+
+  // Cancel → restore picker
+  document.getElementById('cef-cancel-btn').addEventListener('click', () => {
+    if (searchWrap) searchWrap.style.display = '';
+    if (createBtn)  createBtn.style.display  = '';
+    renderExercisePicker(allExercises, dayId);
+  });
+
+  // Save
+  document.getElementById('cef-save-btn').addEventListener('click', async () => {
+    // Clear previous errors
+    ['cef-name','cef-category','cef-equipment'].forEach(id => {
+      document.getElementById(id).classList.remove('input-error');
+      document.getElementById(`err-${id}`).style.display = 'none';
+    });
+
+    const name      = document.getElementById('cef-name').value.trim();
+    const category  = document.getElementById('cef-category').value;
+    const equipment = document.getElementById('cef-equipment').value;
+    let valid = true;
+
+    if (!name) {
+      document.getElementById('cef-name').classList.add('input-error');
+      const e = document.getElementById('err-cef-name');
+      e.textContent = 'Name is required.';
+      e.style.display = '';
+      valid = false;
+    }
+    if (!category) {
+      document.getElementById('cef-category').classList.add('input-error');
+      const e = document.getElementById('err-cef-category');
+      e.textContent = 'Category is required.';
+      e.style.display = '';
+      valid = false;
+    }
+    if (!equipment) {
+      document.getElementById('cef-equipment').classList.add('input-error');
+      const e = document.getElementById('err-cef-equipment');
+      e.textContent = 'Equipment is required.';
+      e.style.display = '';
+      valid = false;
+    }
+    if (!valid) return;
+
+    // Collect optional advanced fields
+    const muscle   = document.getElementById('cef-muscle').value.trim()   || null;
+    const movement = document.getElementById('cef-movement').value         || null;
+    const sets     = parseInt(document.getElementById('cef-sets').value, 10)  || null;
+    const reps     = document.getElementById('cef-reps').value.trim()     || null;
+    const tempo    = document.getElementById('cef-tempo').value.trim()    || null;
+    const rest     = parseInt(document.getElementById('cef-rest').value, 10)  || null;
+    const cue      = document.getElementById('cef-cue').value.trim()      || null;
+
+    const saveBtn = document.getElementById('cef-save-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from('exercises')
+      .insert({
+        name,
+        category,
+        equipment,
+        muscle_group:      muscle,
+        movement_pattern:  movement,
+        default_sets:      sets,
+        default_reps:      reps,
+        default_tempo:     tempo,
+        default_rest_sec:  rest,
+        coaching_cue:      cue,
+        trainer_id:        trainerId,   // scoped to this trainer — never NULL
+        is_glp1_approved:  false,       // trainer-custom exercises do not claim clinical approval
+        is_archived:       false,
+      })
+      .select('id, name, category, equipment, trainer_id')
+      .single();
+
+    if (insertErr) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save & Add to Day';
+      window.iron.showToast(`Save failed: ${insertErr.message}`, 'error');
+      return;
+    }
+
+    window.iron.showToast(`"${name}" created.`, 'success');
+
+    // Prepend new exercise to in-memory list and re-render picker with it pinned at top
+    allExercises = [inserted, ...allExercises];
+    if (searchWrap) searchWrap.style.display = '';
+    if (createBtn)  createBtn.style.display  = '';
+    renderExercisePicker(allExercises, dayId, inserted.id);
+  });
 }
 
 // ── Prescription Panel ─────────────────────────────────
