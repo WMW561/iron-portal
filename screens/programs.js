@@ -428,8 +428,9 @@ function renderDayCard(day) {
 
   return `
     <div class="card day-card" style="margin-bottom:12px;" data-day-id="${day.id}">
-      <div class="day-card-header" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:default;">
-        <!-- Sort order -->
+      <div class="day-card-header" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;" data-day-toggle="${day.id}">
+        <!-- Sort order (shown only when 4+ days) -->
+        ${programDays.length >= 4 ? `
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
           <label class="sr-only" for="sort-${day.id}">Order</label>
           <input type="number" id="sort-${day.id}" class="day-sort-input"
@@ -438,7 +439,7 @@ function renderDayCard(day) {
                  style="width:52px;text-align:center;"
                  data-day-id="${day.id}"
                  aria-label="Sort order for ${escHtml(day.label)}">
-        </div>
+        </div>` : ''}
 
         <!-- Label + sub_label -->
         <div style="flex:1;min-width:0;">
@@ -471,11 +472,20 @@ function renderDayCard(day) {
         <!-- Warmup notes -->
         <div style="padding:0 16px 8px;border-top:1px solid var(--border);">
           <div class="form-group" style="margin-top:12px;margin-bottom:8px;">
+            ${day.warmup_notes ? `
             <label for="warmup-${day.id}" style="font-size:0.8rem;">Warmup Notes</label>
             <textarea id="warmup-${day.id}" rows="2" class="day-warmup"
                       data-day-id="${day.id}"
                       style="font-size:0.85rem;"
-                      placeholder="e.g., 5 min cardio + band pull-aparts">${escHtml(day.warmup_notes ?? '')}</textarea>
+                      placeholder="e.g., 5 min cardio + band pull-aparts">${escHtml(day.warmup_notes)}</textarea>
+            ` : `
+            <button class="btn btn-ghost btn-sm day-warmup-add" data-day-id="${day.id}"
+                    style="font-size:0.8rem;padding:2px 6px;color:var(--text-muted);">+ Add warmup notes</button>
+            <textarea id="warmup-${day.id}" rows="2" class="day-warmup"
+                      data-day-id="${day.id}"
+                      style="font-size:0.85rem;display:none;"
+                      placeholder="e.g., 5 min cardio + band pull-aparts"></textarea>
+            `}
           </div>
 
           <!-- Exercises -->
@@ -542,6 +552,19 @@ function bindDayEvents() {
 
   // Toggle expand/collapse
   container.addEventListener('click', (e) => {
+    // Whole-header toggle — skip if click landed on a control or action button
+    const headerToggle = e.target.closest('[data-day-toggle]');
+    if (headerToggle && !e.target.closest('button, input, textarea, select, a, [contenteditable]')) {
+      const dayId = headerToggle.dataset.dayToggle;
+      if (expandedDays.has(dayId)) {
+        expandedDays.delete(dayId);
+      } else {
+        expandedDays.add(dayId);
+      }
+      refreshDaysContainer();
+      return;
+    }
+
     const toggleBtn = e.target.closest('[data-day-id].toggle-day-btn');
     if (toggleBtn) {
       const dayId = toggleBtn.dataset.dayId;
@@ -551,6 +574,17 @@ function bindDayEvents() {
         expandedDays.add(dayId);
       }
       refreshDaysContainer();
+      return;
+    }
+
+    // Warmup notes reveal button
+    const warmupAdd = e.target.closest('.day-warmup-add');
+    if (warmupAdd) {
+      const btn = warmupAdd;
+      const textarea = btn.nextElementSibling;
+      btn.style.display = 'none';
+      textarea.style.display = '';
+      textarea.focus();
       return;
     }
 
