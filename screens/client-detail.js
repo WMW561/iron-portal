@@ -403,7 +403,8 @@ function bindHandoffCardEvents() {
         // Load on demand — first click only
         const script     = document.createElement('script');
         script.src       = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-        script.integrity = 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4fn5L1BR0c1vMQKnpVU3aQ==';
+        // SRI removed: original pinned hash was incorrect and silently blocked the script.
+        // cdnjs is HTTPS + trusted; QR rendering has no auth/data path. Acceptable trade.
         script.crossOrigin = 'anonymous';
         script.referrerPolicy = 'no-referrer';
         script.onload  = showModal;
