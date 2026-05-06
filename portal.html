@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1C5F72">
+  <title>Iron Platform — Trainer Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Brand pivot 2026-05-06: Plus Jakarta Sans + DM Sans -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+<!-- ── App Shell ──────────────────────────────────────────── -->
+<div id="app-shell">
+
+  <!-- Top Navigation Bar -->
+  <nav class="top-nav" role="banner">
+    <span class="logo">IRON<span>.</span></span>
+    <span class="biz-name" id="biz-name-display">Trainer Portal</span>
+    <div class="nav-actions">
+      <button class="nav-icon-btn" id="btn-nav-settings"
+              aria-label="Settings" title="Settings"
+              onclick="window.location.hash='#settings'">
+        ⚙
+      </button>
+      <button class="nav-icon-btn" aria-label="Help" title="Help"
+              onclick="window.iron.showToast('Documentation coming in Phase 2', 'info')">
+        ?
+      </button>
+    </div>
+  </nav>
+
+  <!-- Sidebar Navigation (Desktop) -->
+  <aside class="sidebar" role="navigation" aria-label="Primary navigation">
+    <ul class="sidebar-nav" role="list">
+      <li>
+        <a href="#dashboard" class="nav-link" data-view="dashboard" role="link">
+          <span class="nav-icon" aria-hidden="true">📊</span>
+          Dashboard
+        </a>
+      </li>
+      <li>
+        <a href="#clients" class="nav-link" data-view="clients" role="link">
+          <span class="nav-icon" aria-hidden="true">👥</span>
+          Clients
+        </a>
+      </li>
+      <li>
+        <a href="#programs" class="nav-link" data-view="programs" role="link">
+          <span class="nav-icon" aria-hidden="true">📋</span>
+          Programs
+        </a>
+      </li>
+      <li>
+        <a href="#assign" class="nav-link" data-view="assign" role="link">
+          <span class="nav-icon" aria-hidden="true">📌</span>
+          Assign
+        </a>
+      </li>
+      <li>
+        <a href="#settings" class="nav-link" data-view="settings" role="link">
+          <span class="nav-icon" aria-hidden="true">⚙</span>
+          Settings
+        </a>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Bottom Navigation (Mobile) -->
+  <nav class="bottom-nav" aria-label="Mobile navigation">
+    <div class="bottom-nav-inner">
+      <button class="bottom-nav-item" data-view="dashboard" onclick="window.location.hash='#dashboard'">
+        <span class="bnav-icon" aria-hidden="true">📊</span>
+        <span>Dashboard</span>
+      </button>
+      <button class="bottom-nav-item" data-view="clients" onclick="window.location.hash='#clients'">
+        <span class="bnav-icon" aria-hidden="true">👥</span>
+        <span>Clients</span>
+      </button>
+      <button class="bottom-nav-item" data-view="programs" onclick="window.location.hash='#programs'">
+        <span class="bnav-icon" aria-hidden="true">📋</span>
+        <span>Programs</span>
+      </button>
+      <button class="bottom-nav-item" data-view="assign" onclick="window.location.hash='#assign'">
+        <span class="bnav-icon" aria-hidden="true">📌</span>
+        <span>Assign</span>
+      </button>
+      <button class="bottom-nav-item" data-view="settings" onclick="window.location.hash='#settings'">
+        <span class="bnav-icon" aria-hidden="true">⚙</span>
+        <span>Settings</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <main class="main-content" id="main-content" role="main">
+
+    <!-- ── View: Login Required ──────────────────────────── -->
+    <section id="view-login-required" style="display:none;" aria-label="Sign in required">
+      <div class="login-required-view">
+        <div style="font-size:48px;margin-bottom:16px;">🔐</div>
+        <h1 style="margin-bottom:8px;">Sign in required</h1>
+        <p class="text-secondary" style="max-width:320px;margin-bottom:24px;line-height:1.6;text-align:center;">
+          You need to be signed in to access the Iron Platform trainer portal.
+        </p>
+        <a href="index.html" class="btn btn-primary btn-lg">Sign in to your portal</a>
+      </div>
+    </section>
+
+    <!-- ── View: Dashboard ───────────────────────────────── -->
+    <section id="view-dashboard" style="display:none;" aria-label="Dashboard" aria-live="polite">
+      <!-- Rendered by screens/dashboard.js -->
+    </section>
+
+    <!-- ── View: Clients ─────────────────────────────────── -->
+    <section id="view-clients" style="display:none;" aria-label="Client management" aria-live="polite">
+      <!-- Rendered by screens/clients.js -->
+    </section>
+
+    <!-- ── View: Settings ────────────────────────────────── -->
+    <section id="view-settings" style="display:none;" aria-label="Settings" aria-live="polite">
+      <!-- Rendered by screens/settings.js -->
+    </section>
+
+    <!-- ── View: Programs (Portal-Half-B stub) ───────────── -->
+    <section id="view-programs" style="display:none;" aria-label="Programs">
+      <div class="stub-view">
+        <div class="stub-label">Portal-Half-B</div>
+        <h2>Program Builder</h2>
+        <p>
+          Create and manage program templates, build workout days,
+          and prescribe exercises. Coming in Portal-Half-B scope.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── View: Assign (Portal-Half-B stub) ─────────────── -->
+    <section id="view-assign" style="display:none;" aria-label="Assign program">
+      <div class="stub-view">
+        <div class="stub-label">Portal-Half-B</div>
+        <h2>Assign Program</h2>
+        <p>
+          Assign a saved program template to a client with a start date.
+          Four-step guided flow. Coming in Portal-Half-B scope.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── View: Client Detail (Portal-Half-B stub) ──────── -->
+    <section id="view-client-detail" style="display:none;" aria-label="Client detail">
+      <div class="stub-view">
+        <div class="stub-label">Portal-Half-B</div>
+        <h2>Client Detail</h2>
+        <p>
+          Deep dive into a single client: workout history, compliance rate,
+          program assignment, and physician report generation.
+          Coming in Portal-Half-B scope.
+        </p>
+      </div>
+    </section>
+
+  </main><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<!-- ── Slide-in Panel (shared) ────────────────────────────── -->
+<div class="panel-overlay" id="panel-overlay" aria-hidden="true"></div>
+<aside class="slide-panel" id="slide-panel" role="dialog" aria-modal="true" aria-label="Form panel">
+  <div class="panel-header" id="panel-header">
+    <h2 id="panel-title">Panel</h2>
+    <button class="panel-close" id="panel-close-btn" aria-label="Close panel">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+  <div class="panel-footer" id="panel-footer" style="display:none;"></div>
+</aside>
+
+<!-- ── Confirm Dialog ─────────────────────────────────────── -->
+<div class="dialog-overlay" id="dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+  <div class="dialog-box">
+    <h3 id="dialog-title">Confirm</h3>
+    <p id="dialog-message">Are you sure?</p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="dialog-cancel">Cancel</button>
+      <button class="btn btn-danger" id="dialog-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ────────────────────────────────────── -->
+<div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ── Main Script ────────────────────────────────────────── -->
+<script type="module" src="./portal.js"></script>
+
+</body>
+</html>

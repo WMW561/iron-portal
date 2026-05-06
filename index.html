@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1C5F72">
+  <title>Iron Platform — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Brand pivot 2026-05-06: Plus Jakarta Sans + DM Sans -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
+  <style>
+    /* Login page overrides — portal.css provides .login-page, .login-card */
+    body { background: var(--navy); }
+  </style>
+</head>
+<body>
+
+<main class="login-page" role="main">
+  <div class="login-card">
+
+    <!-- Logo -->
+    <span class="login-logo" aria-label="Iron Platform">IRON<span>.</span></span>
+
+    <!-- Sign-in form -->
+    <div id="signin-form-wrap">
+      <h1 class="login-headline">Sign in to your trainer portal</h1>
+      <p class="login-sub">
+        Enter your email address and we'll send you a magic link to sign in instantly.
+        No password required.
+      </p>
+
+      <!-- Error banner (hidden by default) -->
+      <div class="alert-banner alert-banner-error" id="login-error" style="display:none;" role="alert">
+        <span id="login-error-text"></span>
+      </div>
+
+      <form id="signin-form" novalidate>
+        <div class="form-group">
+          <label for="email-input">Email address<span class="req" aria-hidden="true">*</span></label>
+          <input
+            type="email"
+            id="email-input"
+            name="email"
+            placeholder="you@yourbusiness.com"
+            autocomplete="email"
+            required
+            autofocus
+          >
+          <span class="field-error" id="email-error" role="alert" style="display:none;"></span>
+        </div>
+
+        <div class="form-group" id="password-group" style="display:none;">
+          <label for="password-input">Password</label>
+          <input
+            type="password"
+            id="password-input"
+            name="password"
+            autocomplete="current-password"
+            placeholder="(set via Supabase admin for dogfood)"
+          >
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full btn-lg" id="signin-btn" style="width:100%;justify-content:center;">
+          Send magic link
+        </button>
+      </form>
+
+      <p class="text-sm text-muted" style="margin-top:16px;text-align:center;">
+        <button class="btn btn-ghost btn-sm" id="btn-toggle-password" style="font-size:13px;">
+          Use password instead
+        </button>
+      </p>
+
+      <p class="text-sm text-secondary" style="margin-top:20px;text-align:center;line-height:1.6;">
+        Don't have an account yet?
+        <a href="mailto:hello@ironfit.co">Contact us</a> to get started.
+      </p>
+    </div>
+
+    <!-- Success state (shown after submit) -->
+    <div class="login-success" id="login-success" role="alert">
+      <div class="success-icon">📬</div>
+      <h3>Check your email</h3>
+      <p>
+        We've sent a magic link to <strong id="success-email"></strong>.
+        Click the link in that email to sign in to your portal.
+      </p>
+      <p class="text-sm text-muted" style="margin-top:16px;">
+        Didn't get it? Check your spam folder or
+        <button class="btn btn-ghost btn-sm" id="btn-resend" style="margin-left:4px;">resend</button>
+      </p>
+    </div>
+
+  </div>
+</main>
+
+<div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+<script type="module">
+  // FILL IN AFTER SUPABASE SETUP — see README.md
+  const SUPABASE_URL      = 'https://emzwoofcnqjoodbbdhvw.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_Pr7Di32pQ39vnv6kN3mZvA_pn57Vbgf';
+
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ── Redirect if already signed in ─────────────────────────
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    window.location.href = 'portal.html#dashboard';
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('login-error');
+    document.getElementById('login-error-text').textContent = msg;
+    el.style.display = '';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function hideError() {
+    document.getElementById('login-error').style.display = 'none';
+  }
+
+  function showSuccess(email) {
+    document.getElementById('signin-form-wrap').style.display = 'none';
+    const success = document.getElementById('login-success');
+    success.style.display = 'block';
+    document.getElementById('success-email').textContent = email;
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('signin-btn');
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Sending…' : 'Send magic link';
+  }
+
+  // ── Form Submit ────────────────────────────────────────────
+  const form = document.getElementById('signin-form');
+  let lastEmail = '';
+
+  async function sendMagicLink(email) {
+    setLoading(true);
+    hideError();
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin +
+          window.location.pathname.replace('index.html', '') +
+          'portal.html#dashboard'
+      }
+    });
+
+    setLoading(false);
+
+    if (error) {
+      showError(error.message || 'Could not send magic link. Please try again.');
+    } else {
+      showSuccess(email);
+    }
+  }
+
+  // Password mode toggle (dogfood path — bypasses email rate limits)
+  let passwordMode = false;
+  const toggleBtn = document.getElementById('btn-toggle-password');
+  const passwordGroup = document.getElementById('password-group');
+  const signinBtn = document.getElementById('signin-btn');
+  toggleBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    passwordMode = !passwordMode;
+    passwordGroup.style.display = passwordMode ? '' : 'none';
+    signinBtn.textContent = passwordMode ? 'Sign in' : 'Send magic link';
+    toggleBtn.textContent = passwordMode ? 'Use magic link instead' : 'Use password instead';
+    if (passwordMode) document.getElementById('password-input').focus();
+  });
+
+  async function signInWithPassword(email, password) {
+    setLoading(true);
+    hideError();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      showError(error.message || 'Sign-in failed.');
+      return;
+    }
+    // Hard navigate to portal so onAuthStateChange + getSession pick up the new session
+    window.location.href = 'portal.html#dashboard';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const emailInput = document.getElementById('email-input');
+    const emailError = document.getElementById('email-error');
+    const email = emailInput.value.trim();
+
+    // Validate email
+    emailInput.classList.remove('input-error');
+    emailError.style.display = 'none';
+
+    if (!email) {
+      emailInput.classList.add('input-error');
+      emailError.textContent = 'Email address is required.';
+      emailError.style.display = '';
+      emailInput.focus();
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      emailInput.classList.add('input-error');
+      emailError.textContent = 'Please enter a valid email address.';
+      emailError.style.display = '';
+      emailInput.focus();
+      return;
+    }
+
+    lastEmail = email;
+
+    if (passwordMode) {
+      const password = document.getElementById('password-input').value;
+      if (!password) {
+        showError('Password required.');
+        return;
+      }
+      await signInWithPassword(email, password);
+    } else {
+      await sendMagicLink(email);
+    }
+  });
+
+  // ── Resend ─────────────────────────────────────────────────
+  document.getElementById('btn-resend').addEventListener('click', async () => {
+    if (!lastEmail) return;
+    const btn = document.getElementById('btn-resend');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    await sendMagicLink(lastEmail);
+    // Keep success state showing
+    document.getElementById('signin-form-wrap').style.display = 'none';
+    document.getElementById('login-success').style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'resend';
+  });
+
+  // ── Enter key on email also submits ───────────────────────
+  document.getElementById('email-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      form.dispatchEvent(new Event('submit'));
+    }
+  });
+</script>
+
+</body>
+</html>
