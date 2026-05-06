@@ -219,7 +219,7 @@ async function fetchAlerts() {
       alerts.push({
         type: days != null && days > 14 ? 'critical' : 'warning',
         clientId: c.id,
-        text: `${c.full_name} — no workout in ${days != null ? days + ' days' : 'unknown'}`,
+        text: days != null ? `${c.full_name} — no workout in ${days} days` : `${c.full_name} — no workouts yet`,
         tag: 'Inactive',
       });
     }

@@ -177,6 +177,9 @@ async function renderFullDetail() {
       </div>
     </div>
 
+    <!-- PWA Handoff -->
+    ${renderPwaHandoffCard(client)}
+
     <!-- Workout History -->
     <div class="card" style="margin-bottom:24px;">
       <div class="card-body">
@@ -223,6 +226,7 @@ async function renderFullDetail() {
   });
 
   bindHistoryRowEvents();
+  bindHandoffCardEvents();
 }
 
 // ── Current Program section ────────────────────────────
@@ -258,26 +262,181 @@ function renderCurrentProgram(assignment, clientId) {
   `;
 }
 
+// ── PWA Handoff card ───────────────────────────────────
+
+function buildPwaUrl(client) {
+  const base = IRON_PWA_BASE_URL.endsWith('/') ? IRON_PWA_BASE_URL : IRON_PWA_BASE_URL + '/';
+  return `${base}?token=${encodeURIComponent(client.pwa_access_token)}`;
+}
+
+function renderPwaHandoffCard(client) {
+  if (!client.pwa_access_token) {
+    return `
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-body">
+          <h2 class="section-title">Hand off to Client</h2>
+          <p style="color:var(--text-muted);font-size:0.875rem;">
+            PWA token not generated yet — generate one above, then return here to share the link.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  const url        = buildPwaUrl(client);
+  const clientName = escHtml(client.full_name);
+  const clientEmail = client.email ? escHtml(client.email) : '';
+  const mailSubject = encodeURIComponent('Your Iron training app');
+  const mailBody   = encodeURIComponent(
+    `Hi ${client.full_name},\n\nHere’s your private workout link:\n${url}\n\nOpen it on your phone and bookmark it — that’s your personal training app.`
+  );
+  const mailtoHref = clientEmail
+    ? `mailto:${clientEmail}?subject=${mailSubject}&body=${mailBody}`
+    : `mailto:?subject=${mailSubject}&body=${mailBody}`;
+
+  return `
+    <div class="card" id="pwa-handoff-card" style="margin-bottom:24px;border-left:3px solid var(--teal);">
+      <div class="card-body">
+        <h2 class="section-title" style="margin-bottom:6px;">Hand off to Client</h2>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px;">
+          Share ${clientName}’s private PWA link so they can start logging workouts.
+        </p>
+
+        <!-- URL display (read-only, selectable) -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <code id="pwa-handoff-url"
+                style="flex:1;min-width:0;font-size:0.72rem;background:var(--bg);padding:6px 10px;
+                       border-radius:var(--radius-sm);border:1px solid var(--border);
+                       word-break:break-all;color:var(--text-secondary);user-select:all;"
+          >${escHtml(url)}</code>
+        </div>
+
+        <!-- Action row -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <!-- Copy link (primary) -->
+          <button class="btn btn-navy btn-sm" id="btn-handoff-copy" aria-label="Copy PWA link to clipboard">
+            📋 Copy Link
+          </button>
+
+          <!-- Show QR (secondary) -->
+          <button class="btn btn-secondary btn-sm" id="btn-handoff-qr" aria-label="Show QR code for client">
+            📱 Show QR
+          </button>
+
+          <!-- Email link (tertiary text link) -->
+          <a href="${mailtoHref}"
+             class="btn btn-ghost btn-sm"
+             aria-label="Email PWA link to ${clientName}"
+          >✉ Email Link</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR modal (hidden until Show QR clicked) -->
+    <div id="qr-modal-overlay" class="dialog-overlay" role="dialog" aria-modal="true" aria-label="QR code for client PWA link">
+      <div class="dialog-box" style="text-align:center;max-width:320px;">
+        <h3 style="margin-bottom:6px;">Client QR Code</h3>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
+          Have ${clientName} scan with their phone camera.
+        </p>
+        <div id="qr-code-container" style="display:flex;justify-content:center;margin-bottom:16px;"></div>
+        <p style="font-size:0.7rem;color:var(--text-muted);word-break:break-all;margin-bottom:20px;">${escHtml(url)}</p>
+        <button class="btn btn-secondary" id="btn-qr-close" style="width:100%;">Close</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindHandoffCardEvents() {
+  // Copy button
+  const copyBtn = document.getElementById('btn-handoff-copy');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const url = document.getElementById('pwa-handoff-url')?.textContent?.trim();
+      if (!url) return;
+      navigator.clipboard.writeText(url).then(() => {
+        copyBtn.textContent = '✓ Copied!';
+        copyBtn.disabled = true;
+        setTimeout(() => {
+          copyBtn.innerHTML = '📋 Copy Link';
+          copyBtn.disabled = false;
+        }, 2000);
+      }).catch(() => {
+        window.iron.showToast('Copy failed — select the link above and copy manually.', 'error');
+      });
+    });
+  }
+
+  // QR button — load qrcodejs on demand (CDN, only when first clicked)
+  const qrBtn     = document.getElementById('btn-handoff-qr');
+  const qrOverlay = document.getElementById('qr-modal-overlay');
+  const qrClose   = document.getElementById('btn-qr-close');
+
+  if (qrBtn && qrOverlay) {
+    qrBtn.addEventListener('click', () => {
+      const url = document.getElementById('pwa-handoff-url')?.textContent?.trim();
+      if (!url) return;
+
+      const container = document.getElementById('qr-code-container');
+      if (!container) return;
+
+      const showModal = () => {
+        // Only generate once per open
+        if (!container.dataset.generated) {
+          container.innerHTML = '';
+          // eslint-disable-next-line no-undef
+          new QRCode(container, {
+            text:          url,
+            width:         220,
+            height:        220,
+            colorDark:     '#1C5F72',
+            colorLight:    '#ffffff',
+            correctLevel:  QRCode.CorrectLevel.M,
+          });
+          container.dataset.generated = '1';
+        }
+        qrOverlay.classList.add('open');
+        qrClose?.focus();
+      };
+
+      if (typeof QRCode === 'undefined') {
+        // Load on demand — first click only
+        const script     = document.createElement('script');
+        script.src       = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+        script.integrity = 'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4fn5L1BR0c1vMQKnpVU3aQ==';
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+        script.onload  = showModal;
+        script.onerror = () => window.iron.showToast('Could not load QR library — check your connection.', 'error');
+        document.head.appendChild(script);
+      } else {
+        showModal();
+      }
+    });
+
+    // Close modal
+    const closeModal = () => qrOverlay.classList.remove('open');
+    qrClose?.addEventListener('click', closeModal);
+    qrOverlay.addEventListener('click', (e) => {
+      if (e.target === qrOverlay) closeModal();
+    });
+    qrOverlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  }
+}
+
 // ── Workout History list ───────────────────────────────
 
 function renderHistoryList() {
   if (!workoutSessions.length) {
     const client = currentClient;
-    // Show PWA token link as copyable
-    const base = IRON_PWA_BASE_URL.endsWith('/') ? IRON_PWA_BASE_URL : IRON_PWA_BASE_URL + '/';
-    const pwaUrl = `${base}?token=${encodeURIComponent(client.pwa_access_token ?? '')}`;
     return `
       <div class="empty-state" style="padding:24px 12px;">
         <div class="empty-icon" style="font-size:1.5rem;">🏋️</div>
         <p style="color:var(--text-muted);font-size:0.9rem;">
-          No workouts logged yet. ${escHtml(client.full_name)} can begin by opening their PWA link.
+          No workouts logged yet. Share the link above so ${escHtml(client.full_name)} can start logging.
         </p>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
-          <code id="pwa-url-display" style="font-size:0.75rem;background:var(--bg);padding:6px 10px;border-radius:4px;border:1px solid var(--border);word-break:break-all;">${escHtml(pwaUrl)}</code>
-          <button class="btn btn-secondary btn-sm" id="btn-copy-pwa-url" aria-label="Copy PWA link">
-            Copy Link
-          </button>
-        </div>
       </div>
     `;
   }
@@ -399,21 +558,6 @@ function bindHistoryRowEvents() {
 
   // Remove old listener by replacing node — safer for dynamic re-renders
   historyList.addEventListener('click', handleHistoryClick);
-
-  // PWA copy button (only exists in empty state)
-  const copyBtn = document.getElementById('btn-copy-pwa-url');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', () => {
-      const url = document.getElementById('pwa-url-display')?.textContent?.trim();
-      if (url) {
-        navigator.clipboard.writeText(url).then(() => {
-          window.iron.showToast('PWA link copied to clipboard.', 'success');
-        }).catch(() => {
-          window.iron.showToast('Copy failed — please copy the link manually.', 'error');
-        });
-      }
-    });
-  }
 }
 
 async function handleHistoryClick(e) {

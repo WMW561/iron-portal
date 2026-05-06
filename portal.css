@@ -1291,6 +1291,16 @@ input[type="color"] {
   margin-top: 6px;
 }
 
+/* ── QR Code modal (client-detail handoff) ────────────────── */
+#qr-code-container canvas,
+#qr-code-container img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+}
+
 /* ── Misc Utilities ───────────────────────────────────────── */
 .flex { display: flex; }
 .flex-col { display: flex; flex-direction: column; }
