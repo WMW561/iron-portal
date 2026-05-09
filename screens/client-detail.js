@@ -26,6 +26,7 @@ const IRON_PWA_BASE_URL =
 
 // ── Module state ───────────────────────────────────────
 let currentClient    = null;
+let currentAssignment = null;     // Active program assignment for current client
 let workoutSessions  = [];        // All sessions for current range
 let expandedSessions = new Set(); // session IDs with expanded set-level detail
 let currentRange     = '30d';     // '30d' | '90d' | 'all'
@@ -90,15 +91,22 @@ async function renderFullDetail() {
   const section = document.getElementById('view-client-detail');
   const client  = currentClient;
 
-  // Fetch active assignment + sessions in parallel
-  const [assignResult, sessionsResult] = await Promise.all([
+  // Fetch active assignment + sessions + physician report in parallel
+  const [assignResult, sessionsResult, physicianReportResult] = await Promise.all([
     fetchActiveAssignment(client.id),
     fetchSessions(client.id, currentRange),
+    supabase
+      .from('physician_reports')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('sent_at', { ascending: false })
+      .limit(1),
   ]);
 
   workoutSessions = sessionsResult ?? [];
 
-  const activeAssignment = assignResult;
+  currentAssignment = assignResult;
+  const lastPhysicianReport = physicianReportResult?.data?.[0] || null;
 
   // ── Stat computations ────────────────────────────────
   const stats = computeStats(workoutSessions, activeAssignment);
@@ -197,15 +205,12 @@ async function renderFullDetail() {
       </div>
     </div>
 
-    <!-- Physician Reports (Phase 2 placeholder) -->
+    <!-- Physician Reports -->
     <div class="card" style="margin-bottom:40px;">
       <div class="card-body">
-        <h2 class="section-title">Physician Reports</h2>
-        <div class="empty-state" style="padding:24px 12px;">
-          <div class="empty-icon" style="font-size:1.5rem;">🩺</div>
-          <p style="color:var(--text-muted);font-size:0.9rem;">
-            Physician reports activate in Phase 2 (Pro tier feature).
-          </p>
+        <h2 class="section-title">🩺 Physician Reports</h2>
+        <div id="physician-reports-section">
+          ${renderPhysicianReportsSection(client, stats, lastPhysicianReport)}
         </div>
       </div>
     </div>
@@ -227,6 +232,7 @@ async function renderFullDetail() {
 
   bindHistoryRowEvents();
   bindHandoffCardEvents();
+  bindPhysicianReportEvents(client, stats);
 }
 
 // ── Current Program section ────────────────────────────
@@ -425,6 +431,117 @@ function bindHandoffCardEvents() {
       if (e.key === 'Escape') closeModal();
     });
   }
+}
+
+// ── Physician Reports ──────────────────────────────────
+
+function buildPhysicianEmailBody(client, stats) {
+  const lastWorkoutDate = stats.lastWorkout ? new Date(stats.lastWorkout).toLocaleDateString() : 'No workouts yet';
+  const programName = currentAssignment?.program_templates?.name || 'Not assigned';
+  const goal = client.physician_goal_summary || '(Not specified by trainer)';
+  const statusLabel = client.on_glp1 ? 'GLP-1 Patient' : 'Non-GLP-1';
+
+  return `IRON PLATFORM — PATIENT TRAINING REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATIENT INFORMATION
+Name: ${client.full_name}
+Status: ${statusLabel}
+Age: ${computeAge(client.date_of_birth)} years old
+Current Weight: ${client.current_weight_lbs || '(not recorded)'} lbs
+
+TRAINING PROGRAM
+Program: ${programName}
+Goal: ${goal}
+
+COMPLIANCE SUMMARY — LAST 30 DAYS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Completion Rate: ${stats.compliancePct || '—'}
+Sessions: ${stats.workoutsLabel || '—'}
+${stats.avgDuration && stats.avgDuration !== '—' ? `Average Session Length: ${stats.avgDuration}` : 'Average Session Length: Not yet available'}
+Last Workout: ${lastWorkoutDate}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Report Generated: ${new Date().toLocaleDateString()} by Iron Platform
+https://ironfit.co
+`;
+}
+
+function renderPhysicianReportsSection(client, stats, lastReport) {
+  const lastSentText = lastReport?.sent_at
+    ? `Last sent: ${new Date(lastReport.sent_at).toLocaleDateString()}`
+    : 'Never sent';
+
+  return `
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <input
+          type="email"
+          id="input-physician-email"
+          placeholder="Physician email address"
+          style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:0.9rem; width:100%;"
+        >
+        <button
+          id="btn-send-physician-report"
+          class="btn btn-navy btn-sm"
+          style="justify-content:center; width:100%;"
+        >
+          📧 Send Report
+        </button>
+      </div>
+      <div style="font-size:0.85rem; color:var(--text-muted);">
+        ${lastSentText}
+      </div>
+    </div>
+  `;
+}
+
+function bindPhysicianReportEvents(client, stats) {
+  const emailInput = document.getElementById('input-physician-email');
+  const sendBtn = document.getElementById('btn-send-physician-report');
+
+  sendBtn?.addEventListener('click', async () => {
+    const email = emailInput?.value?.trim();
+    if (!email) {
+      alert('Please enter a physician email address');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+
+    const body = buildPhysicianEmailBody(client, stats);
+    const subject = encodeURIComponent(`Patient Report: ${client.full_name}`);
+    const bodyEncoded = encodeURIComponent(body);
+    const mailtoLink = `mailto:${email}?subject=${subject}&body=${bodyEncoded}`;
+
+    // Open the mailto link
+    window.location.href = mailtoLink;
+
+    // Record the send in Supabase (after a short delay to let user interact with email client)
+    setTimeout(async () => {
+      try {
+        const trainerId = (await supabase.auth.getUser()).data.user.id;
+        await supabase.from('physician_reports').insert({
+          client_id: client.id,
+          trainer_id: trainerId,
+          sent_to_email: email,
+          sent_at: new Date().toISOString(),
+          summary_stats_json: JSON.stringify(stats),
+        });
+      } catch (err) {
+        console.warn('Failed to record physician report send:', err);
+      }
+
+      sendBtn.disabled = false;
+      sendBtn.textContent = '📧 Send Report';
+    }, 1000);
+  });
 }
 
 // ── Workout History list ───────────────────────────────

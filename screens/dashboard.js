@@ -106,10 +106,6 @@ export async function renderDashboard() {
         <button class="btn btn-navy" onclick="window.location.hash='#assign'">
           + Assign Program
         </button>
-        <button class="btn btn-secondary"
-                onclick="window.iron.showToast('Reports coming in Phase 2 (Pro tier)', 'info')">
-          📄 Reports
-        </button>
       </div>
     </div>
   `;
